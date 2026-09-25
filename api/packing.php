@@ -71,7 +71,8 @@ switch ($action) {
                 'variant'  => $s['variant_summary'] ?: 'Standard',
                 'addons'   => $s['addons'] ?: '—',
             ];
-            $perPlan[$pid]['quantities']['Snack Box Base Kit'] = ($perPlan[$pid]['quantities']['Snack Box Base Kit'] ?? 0) + 1;
+            $kit = $s['plan_name'] . ' Base Kit';
+            $perPlan[$pid]['quantities'][$kit] = ($perPlan[$pid]['quantities'][$kit] ?? 0) + 1;
             if ($s['addons']) {
                 foreach (explode(' + ', $s['addons']) as $addon) {
                     $perPlan[$pid]['quantities'][trim($addon)] = ($perPlan[$pid]['quantities'][trim($addon)] ?? 0) + 1;
@@ -97,7 +98,7 @@ switch ($action) {
 }
 
 function sku_for_name(string $name): string {
-    $map = ['Snack Box Base Kit' => 'SNK-BASE', 'Beauty Box' => 'BTY-BASE', 'Coffee Club' => 'COF-BASE',
+    $map = ['Snack Box Base Kit' => 'SNK-BASE', 'Beauty Box Base Kit' => 'BTY-BASE', 'Coffee Club Base Kit' => 'COF-BASE',
             'Extra protein bar' => 'SNK-PROT', 'Insulated tumbler' => 'SNK-TMBL',
             'Sheet mask trio' => 'BTY-MASK', 'Mini serum' => 'BTY-SERM', 'Limited roast 250g' => 'COF-LTD'];
     return $map[$name] ?? strtoupper(preg_replace('/[^A-Z0-9]+/', '-', substr($name, 0, 12)));
