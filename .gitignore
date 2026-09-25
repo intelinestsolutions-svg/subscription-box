@@ -1,0 +1,17 @@
+# Secrets — never commit local config (DB creds, live Ollama tunnel URL, carrier keys)
+api/config.local.php
+
+# Runtime artifacts (notification logs, generated label CSVs, receipts)
+storage/
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Deployment archives
+*.zip
+*.tar.gz
