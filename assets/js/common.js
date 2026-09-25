@@ -79,7 +79,7 @@
     }[role] || [];
     const u = getUser();
     document.body.innerHTML = '<div class="app"><aside class="sidebar">' +
-      '<div class="brand"><div class="logo">📦</div><div>Studio Pro Platform</div></div>' +
+      '<div class="brand"><div class="logo">📦</div><div>SP eCommerce Platform</div></div>' +
       nav.map(([id, label]) => '<button class="nav-item' + (id === active ? ' active' : '') + '" data-nav="' + id + '">' + label + '</button>').join('') +
       '<div class="spacer"></div>' +
       '<div class="user-chip"><b>' + esc(u?.name || '') + '</b>' + esc(u?.email || '') +
