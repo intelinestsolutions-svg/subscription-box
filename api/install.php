@@ -42,6 +42,7 @@ $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`"); // no-op if exists
 // ---- seed (only when empty) ----
 $chk = $pdo->query('SELECT COUNT(*) c FROM users')->fetch();
 if ((int)$chk['c'] > 0) {
+    sync_demo_users($pdo);   // heal stale demo rows (e.g. pre-rebrand names) on redeploys
     json_out(['message' => "Schema ready. Demo data already present ({$chk['c']} users).",
               'logins' => ['merchant@demo.test / demo1234', 'ops@demo.test / demo1234', 'alice@demo.test / demo1234']]);
 }
@@ -267,4 +268,28 @@ function seed(PDO $pdo): void {
     );
     $sh->execute([$subs['alice@demo.test'], $lastCycle, 'local_csv', 'TRK-ALICE-001', 'storage/labels/alice-001.pdf', 4.80, 'delivered', $d(-15)]);
     $sh->execute([$subs['henry@demo.test'], $lastCycle, 'local_csv', 'TRK-HENRY-001', 'storage/labels/henry-001.pdf', 4.80, 'delivered', $d(-15)]);
+}
+
+// ---- heal stale demo rows when demo data already exists ----
+// Older installs may carry outdated seed values (e.g. pre-rebrand demo names).
+// Keeps the fixed demo accounts aligned with the current brand on every install run.
+function sync_demo_users(PDO $pdo): void {
+    $demo = [
+        'merchant@demo.test' => ['Studio Pro Admin', '+60123450001'],
+        'ops@demo.test'      => ['Ops Lead',         '+60123450002'],
+        'alice@demo.test'    => ['Alice Tan',        '+60123451001'],
+        'bob@demo.test'      => ['Bob Lee',          '+60123451002'],
+        'carol@demo.test'    => ['Carol Lim',        '+60123451003'],
+        'dave@demo.test'     => ['Dave Ooi',         '+60123451004'],
+        'erin@demo.test'     => ['Erin Wong',        '+60123451005'],
+        'frank@demo.test'    => ['Frank Yap',        '+60123451006'],
+        'grace@demo.test'    => ['Grace Hoe',        '+60123451007'],
+        'henry@demo.test'    => ['Henry Goh',        '+60123451008'],
+        'ivy@demo.test'      => ['Ivy Chin',         '+60123451009'],
+        'jack@demo.test'     => ['Jack Mah',         '+60123451010'],
+    ];
+    $st = $pdo->prepare('UPDATE users SET name = ?, phone = ? WHERE email = ?');
+    foreach ($demo as $email => [$name, $phone]) {
+        $st->execute([$name, $phone, $email]);
+    }
 }
