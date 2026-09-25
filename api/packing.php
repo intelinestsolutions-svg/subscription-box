@@ -52,6 +52,17 @@ switch ($action) {
 
         if (!$subs) json_out(['generated' => false, 'note' => "No boxes to pack for $cycle."]);
 
+        // Regenerate in place: clear any earlier runs for this cycle so re-clicks
+        // (and repeated API calls) never pile up duplicate runs or stale items.
+        $st = $GLOBALS['pdo']->prepare('SELECT id FROM packing_runs WHERE cycle_date = ?');
+        $st->execute([$cycle]);
+        $old = $st->fetchAll(PDO::FETCH_COLUMN);
+        if ($old) {
+            $q = implode(',', array_fill(0, count($old), '?'));
+            $GLOBALS['pdo']->prepare("DELETE FROM packing_items WHERE run_id IN ($q)")->execute($old);
+            $GLOBALS['pdo']->prepare("DELETE FROM packing_runs WHERE id IN ($q)")->execute($old);
+        }
+
         // Per plan: grouped kitting lines + per-box breakdown
         $perPlan = [];
         $created = [];

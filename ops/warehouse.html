@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Operations Console — Studio Pro</title>
 <!-- BUMP ?v=... on every deploy: Hostinger serves assets with 7-day cache -->
-<link rel="stylesheet" href="../assets/css/app.css?v=20260926">
+<link rel="stylesheet" href="../assets/css/app.css?v=20260927">
 </head>
 <body>
-<script src="../assets/js/common.js?v=20260926"></script>
+<script src="../assets/js/common.js?v=20260927"></script>
 <script>
 (function () {
   const { $, $$, esc, fmtMoney, fmtDate, api, toast, requireRole, shell, roles } = window.SP;
@@ -28,13 +28,21 @@
       const runs = await api('packing.php?action=runs');
       const wrap = $('#pk-out');
       wrap.innerHTML = '<div class="card"><h2>Previous runs</h2>' + (runs.length ?
-        '<table><thead><tr><th>Cycle</th><th>Plan</th><th>Boxes</th><th>Status</th><th></th></tr></thead><tbody>' +
+        '<div class="table-wrap"><table><thead><tr><th>Cycle</th><th>Plan</th><th>Boxes</th><th>Status</th><th></th></tr></thead><tbody>' +
         runs.map(r => '<tr><td>' + esc(r.cycle_date) + '</td><td>' + esc(r.plan_name) + '</td><td>' + r.total_boxes + '</td><td><span class="badge ' + (r.status === 'done' ? 'ok' : 'muted') + '">' + esc(r.status) + '</span></td>' +
-        '<td><button class="btn btn-sm" data-items="' + r.id + '">View items</button></td></tr>').join('') + '</tbody></table>' :
+        '<td><button class="btn btn-sm" data-items="' + r.id + '">View items</button></td></tr>' +
+        '<tr class="pk-items" id="pk-items-' + r.id + '" style="display:none"><td colspan="5" class="muted"></td></tr>').join('') + '</tbody></table></div>' :
         '<div class="empty">No packing runs yet — generate one.</div>') + '</div>';
       $$('[data-items]', wrap).forEach(b => b.addEventListener('click', async () => {
-        const items = await api('packing.php?action=items&run_id=' + b.dataset.items);
-        toast(items.map(i => i.qty + '× ' + i.item_name).join(' · '), '');
+        const row = $('#pk-items-' + b.dataset.items, wrap);
+        if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+        try {
+          const items = await api('packing.php?action=items&run_id=' + b.dataset.items);
+          row.innerHTML = '<b>📋 Pick list</b> — ' + (items.length
+            ? items.map(i => esc(i.item_name) + ' ×<b>' + i.qty + '</b> <span class="badge muted mono">' + esc(i.sku) + '</span>').join(' &nbsp;·&nbsp; ')
+            : '<span class="muted">No items recorded for this run.</span>');
+          row.style.display = '';
+        } catch (e) { row.innerHTML = '<span class="warn">⚠ ' + esc(e.message) + '</span>'; row.style.display = ''; }
       }));
     }
     $('#pk-gen').addEventListener('click', async () => {

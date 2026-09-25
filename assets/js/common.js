@@ -85,9 +85,11 @@
       '<div class="user-chip"><b>' + esc(u?.name || '') + '</b>' + esc(u?.email || '') +
       '<div style="margin-top:6px"><button class="btn btn-sm btn-ghost" id="logout">Log out</button></div></div>' +
       '</aside><main class="main"><div id="view"></div></main></div>';
+    let current = active;
     $$('.nav-item').forEach(b => b.addEventListener('click', () => {
-      if (b.dataset.nav === active) return;
+      if (b.dataset.nav === current) return;
       switchViews(window.SP.roles[role][b.dataset.nav]);
+      current = b.dataset.nav;
       $$('.nav-item').forEach(x => x.classList.toggle('active', x === b));
     }));
     $('#logout').addEventListener('click', async () => { await api('auth.php?action=logout', { method: 'POST' }).catch(() => {}); clearAuth(); location.href = (API_BASE === 'api' ? '' : '../') + 'index.html'; });
