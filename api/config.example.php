@@ -1,12 +1,12 @@
 <?php
-// SBC Subscription Box — configuration template.
+// Studio Pro Subscription Box — configuration template.
 // Copy this file to config.local.php and fill in your values.
 // config.local.php is NOT committed / deployed to the web root examples.
 
 return [
     // Database (MySQL)
     'db_host'      => 'localhost',
-    'db_name'      => 'sbc_subscriptionbox',
+    'db_name'      => 'sp_subscriptionbox',
     'db_user'      => 'root',
     'db_pass'      => '',
 

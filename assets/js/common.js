@@ -1,9 +1,9 @@
-/* SBC Subscription Box — shared JS: API client + auth + UI helpers */
+/* Studio Pro Subscription Box — shared JS: API client + auth + UI helpers */
 (function () {
   'use strict';
 
-  const TOKEN_KEY = 'sbc_token';
-  const USER_KEY = 'sbc_user';
+  const TOKEN_KEY = 'sp_token';
+  const USER_KEY = 'sp_user';
   const CURRENCY = 'RM';
 
   /* API base relative to page location: /subscriber/x.html → ../api */
@@ -79,7 +79,7 @@
     }[role] || [];
     const u = getUser();
     document.body.innerHTML = '<div class="app"><aside class="sidebar">' +
-      '<div class="brand"><div class="logo">📦</div><div>SBC Platform</div></div>' +
+      '<div class="brand"><div class="logo">📦</div><div>Studio Pro Platform</div></div>' +
       nav.map(([id, label]) => '<button class="nav-item' + (id === active ? ' active' : '') + '" data-nav="' + id + '">' + label + '</button>').join('') +
       '<div class="spacer"></div>' +
       '<div class="user-chip"><b>' + esc(u?.name || '') + '</b>' + esc(u?.email || '') +
@@ -87,7 +87,7 @@
       '</aside><main class="main"><div id="view"></div></main></div>';
     $$('.nav-item').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.nav === active) return;
-      switchViews(window.SBC.roles[role][b.dataset.nav]);
+      switchViews(window.SP.roles[role][b.dataset.nav]);
       $$('.nav-item').forEach(x => x.classList.toggle('active', x === b));
     }));
     $('#logout').addEventListener('click', async () => { await api('auth.php?action=logout', { method: 'POST' }).catch(() => {}); clearAuth(); location.href = (API_BASE === 'api' ? '' : '../') + 'index.html'; });
@@ -95,5 +95,5 @@
 
   function switchViews(fn) { $('#view').innerHTML = ''; fn(); }
 
-  window.SBC = { API_BASE, $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, switchViews, getUser, clearAuth, roles: {} };
+  window.SP = { API_BASE, $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, switchViews, getUser, clearAuth, roles: {} };
 })();

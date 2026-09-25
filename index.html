@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SBC Subscription Box Platform</title>
+<title>Studio Pro Subscription Box Platform</title>
 <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
@@ -49,7 +49,7 @@
 <script src="assets/js/common.js"></script>
 <script>
 (function () {
-  const { $, $$, api, toast, setAuth, getUser } = window.SBC;
+  const { $, $$, api, toast, setAuth, getUser } = window.SP;
   let mode = 'login';
   let pendingRole = 'subscriber';
 
@@ -98,7 +98,7 @@
   });
 
   if (getUser()) {
-    const u = JSON.parse(localStorage.getItem('sbc_user') || 'null');
+    const u = JSON.parse(localStorage.getItem('sp_user') || 'null');
     if (u) window.location.href = u.role === 'merchant' ? 'merchant/dashboard.html' : u.role === 'ops' ? 'ops/warehouse.html' : 'subscriber/portal.html';
   }
 })();

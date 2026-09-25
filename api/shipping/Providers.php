@@ -73,7 +73,7 @@ final class DhlProvider implements ShippingProvider
             'accounts' => [['number' => $key, 'typeCode' => 'shipper']],
             'customerDetails' => [
                 'shipperDetails' => ['postalAddress' => ['postalCode' => '88000', 'cityName' => 'Kota Kinabalu',
-                    'countryCode' => 'MY', 'addressLine1' => 'SBC HQ', 'provinceCode' => 'SBH', 'provinceName' => 'Sabah']],
+                    'countryCode' => 'MY', 'addressLine1' => 'Studio Pro HQ', 'provinceCode' => 'SBH', 'provinceName' => 'Sabah']],
                 'receiverDetails' => ['postalAddress' => [
                     'postalCode' => $shipment['to']['postal_code'],
                     'cityName'   => $shipment['to']['city'],
@@ -149,8 +149,8 @@ final class FedExProvider implements ShippingProvider
                 'serviceType' => 'FEDEX_GROUND',
                 'packagingType' => 'YOUR_PACKAGING',
                 'totalWeight' => ['units' => 'KG', 'value' => 1.0],
-                'shipper' => ['contact' => ['personName' => 'SBC Distribution'], 'address' => [
-                    'streetLines' => ['SBC HQ, 1 Jln Sederhana'], 'city' => 'Kota Kinabalu',
+                'shipper' => ['contact' => ['personName' => 'Studio Pro Distribution'], 'address' => [
+                    'streetLines' => ['Studio Pro HQ, 1 Jln Sederhana'], 'city' => 'Kota Kinabalu',
                     'stateOrProvinceCode' => 'SBH', 'postalCode' => '88000', 'countryCode' => 'MY']],
                 'recipients' => [['contact' => ['personName' => $shipment['to']['name']], 'address' => [
                     'streetLines' => array_filter([$shipment['to']['line1'], $shipment['to']['line2'] ?? '']),

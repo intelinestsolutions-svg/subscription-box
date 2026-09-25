@@ -1,4 +1,4 @@
--- SBC Subscription Box Management Platform — schema (MySQL 8 / InnoDB / utf8mb4)
+-- Studio Pro Subscription Box Management Platform — schema (MySQL 8 / InnoDB / utf8mb4)
 -- Run via api/install.php (creates tables + seeds demo data).
 
 SET NAMES utf8mb4;

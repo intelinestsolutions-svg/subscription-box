@@ -1,6 +1,6 @@
 <?php
 /**
- * SBC Subscription Box — bootstrap.
+ * Studio Pro Subscription Box — bootstrap.
  * Shared by every api/*.php endpoint: CORS, JSON helpers, DB, auth, config.
  */
 declare(strict_types=1);

@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Merchant Dashboard — SBC</title>
+<title>Merchant Dashboard — Studio Pro</title>
 <link rel="stylesheet" href="../assets/css/app.css">
 </head>
 <body>
 <script src="../assets/js/common.js"></script>
 <script>
 (function () {
-  const { $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, roles } = window.SBC;
+  const { $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, roles } = window.SP;
   const user = requireRole('merchant', 'ops');
   if (!user) return;
 

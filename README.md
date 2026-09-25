@@ -1,4 +1,4 @@
-# SBC Subscription Box Management Platform
+# Studio Pro Subscription Box Management Platform
 
 An API-first subscription box platform built for **recurring physical products** — the operational
 headaches generic e-commerce tools ignore. PHP 8 + MySQL, JSON API, deploys to plain shared hosting
@@ -30,7 +30,7 @@ headaches generic e-commerce tools ignore. PHP 8 + MySQL, JSON API, deploys to p
 ## Stack & structure
 
 ```
-SBC-SubscriptionBox/
+sp-subscription-box/
 ├── index.html              ← role router (Subscriber / Merchant / Ops)
 ├── subscriber/  portal.html
 ├── merchant/    dashboard.html
@@ -54,7 +54,7 @@ SBC-SubscriptionBox/
 
 ## Quickstart
 
-1. **Create the database** (MySQL), e.g. `sbc_subscriptionbox`.
+1. **Create the database** (MySQL), e.g. `sp_subscriptionbox`.
 2. **Configure** — copy `api/config.example.php` → `api/config.local.php` and set:
    - `db_*` (Hostinger credentials)
    - `app_url` → your site URL
@@ -124,8 +124,8 @@ same hosting account as `prostudio.my`. The repo is public, so Hostinger can pul
 ```php
 <?php return [
     'db_host'      => 'localhost',              // as shown in hPanel
-    'db_name'      => 'u123456789_sbc',         // ← your created DB
-    'db_user'      => 'u123456789_sbc',         // ← your DB user
+    'db_name'      => 'u123456789_sp',         // ← your created DB
+    'db_user'      => 'u123456789_sp',         // ← your DB user
     'db_pass'      => 'YOUR-DB-PASSWORD',       // ← your DB password
 
     'app_url'      => 'https://test.prostudio.my',

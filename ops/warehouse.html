@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Operations Console — SBC</title>
+<title>Operations Console — Studio Pro</title>
 <link rel="stylesheet" href="../assets/css/app.css">
 </head>
 <body>
 <script src="../assets/js/common.js"></script>
 <script>
 (function () {
-  const { $, $$, esc, fmtMoney, fmtDate, api, toast, requireRole, shell, roles } = window.SBC;
+  const { $, $$, esc, fmtMoney, fmtDate, api, toast, requireRole, shell, roles } = window.SP;
   const user = requireRole('merchant', 'ops');
   if (!user) return;
 

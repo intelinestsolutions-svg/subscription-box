@@ -71,7 +71,7 @@ function seed(PDO $pdo): void {
         $st->execute([$name, $email, $phone, password_hash('demo1234', PASSWORD_DEFAULT), $role]);
         $users[$email] = (int)$pdo->lastInsertId();
     };
-    $mkUser('SBC Admin', 'merchant@demo.test', 'merchant', '+60123450001');
+    $mkUser('Studio Pro Admin', 'merchant@demo.test', 'merchant', '+60123450001');
     $mkUser('Ops Lead',  'ops@demo.test',      'ops',      '+60123450002');
     $mkUser('Alice Tan', 'alice@demo.test',  'subscriber', '+60123451001');
     $mkUser('Bob Lee',   'bob@demo.test',    'subscriber', '+60123451002');
