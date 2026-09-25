@@ -95,5 +95,5 @@
 
   function switchViews(fn) { $('#view').innerHTML = ''; fn(); }
 
-  window.SP = { API_BASE, $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, switchViews, getUser, clearAuth, roles: {} };
+  window.SP = { API_BASE, $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, switchViews, setAuth, getUser, clearAuth, roles: {} };
 })();
