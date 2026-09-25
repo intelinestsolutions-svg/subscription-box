@@ -32,9 +32,11 @@ $schema = file_get_contents(__DIR__ . '/../db/schema.sql');
 if ($schema === false) json_err('schema.sql not found.', 500);
 $schema = preg_replace('/--[^\n]*/', '', $schema);            // strip comments
 $statements = array_filter(array_map('trim', explode(';', $schema)));
+$pdo->exec('SET FOREIGN_KEY_CHECKS = 0');   // tolerate any CREATE order on fresh installs
 foreach ($statements as $stmt) {
     if ($stmt !== '') { $pdo->exec($stmt); }
 }
+$pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
 $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`"); // no-op if exists
 
 // ---- seed (only when empty) ----
@@ -95,33 +97,33 @@ function seed(PDO $pdo): void {
 
     // ---- variant fields (Box Customization Engine) ----
     $fields = [];
-    $mkField = fn(string $plan, string $key, string $label, array $opts) => function () use (&$fields, $pdo, $plans, $plan, $key, $label, $opts) {
+    $mkField = function (string $plan, string $key, string $label, array $opts) use (&$fields, $plans, $pdo) {
         $st = $pdo->prepare('INSERT INTO variant_fields (plan_id, field_key, field_label, options_json) VALUES (?,?,?,?)');
         $st->execute([$plans[$plan], $key, $label, json_encode($opts)]);
         $fields[$plan . '.' . $key] = (int)$pdo->lastInsertId();
     };
-    ($mkField('Snack Box', 'flavor', 'Snack flavor', ['Original', 'Spicy', 'Sweet']))();
-    ($mkField('Snack Box', 'size',   'Box size',    ['Regular', 'Large']))();
-    ($mkField('Beauty Box','skin',   'Skin type',   ['Normal', 'Oily', 'Dry', 'Sensitive']))();
-    ($mkField('Beauty Box','shade',  'Makeup shade',['Light', 'Medium', 'Deep']))();
-    ($mkField('Coffee Club','roast', 'Roast profile',['Light', 'Medium', 'Dark']))();
-    ($mkField('Coffee Club','grind', 'Grind',       ['Whole bean', 'Ground']))();
+    $mkField('Snack Box', 'flavor', 'Snack flavor', ['Original', 'Spicy', 'Sweet']);
+    $mkField('Snack Box', 'size',   'Box size',    ['Regular', 'Large']);
+    $mkField('Beauty Box','skin',   'Skin type',   ['Normal', 'Oily', 'Dry', 'Sensitive']);
+    $mkField('Beauty Box','shade',  'Makeup shade',['Light', 'Medium', 'Deep']);
+    $mkField('Coffee Club','roast', 'Roast profile',['Light', 'Medium', 'Dark']);
+    $mkField('Coffee Club','grind', 'Grind',       ['Whole bean', 'Ground']);
 
     // ---- add-ons ----
-    $mkAddon = fn(string $plan, string $name, float $price, string $sku) => function () use ($pdo, $plans, $plan, $name, $price, $sku) {
+    $mkAddon = function (string $plan, string $name, float $price, string $sku) use ($plans, $pdo) {
         $st = $pdo->prepare('INSERT INTO addons (plan_id, name, price, sku) VALUES (?,?,?,?)');
         $st->execute([$plans[$plan], $name, $price, $sku]);
     };
-    ($mkAddon('Snack Box',  'Extra protein bar',    4.50, 'SNK-PROT'))();
-    ($mkAddon('Snack Box',  'Insulated tumbler',   12.00, 'SNK-TMBL'))();
-    ($mkAddon('Beauty Box', 'Sheet mask trio',      6.00, 'BTY-MASK'))();
-    ($mkAddon('Beauty Box', 'Mini serum',          19.00, 'BTY-SERM'))();
-    ($mkAddon('Coffee Club','Limited roast 250g',  18.00, 'COF-LTD'))();
+    $mkAddon('Snack Box',  'Extra protein bar',    4.50, 'SNK-PROT');
+    $mkAddon('Snack Box',  'Insulated tumbler',   12.00, 'SNK-TMBL');
+    $mkAddon('Beauty Box', 'Sheet mask trio',      6.00, 'BTY-MASK');
+    $mkAddon('Beauty Box', 'Mini serum',          19.00, 'BTY-SERM');
+    $mkAddon('Coffee Club','Limited roast 250g',  18.00, 'COF-LTD');
 
     // ---- addresses (some deliberately messy for validation demo) ----
     $addr = [];
     $mkAddr = function (string $email, string $l1, string $city, string $state, string $zip) use (&$addr, $users, $pdo) {
-        $st = $pdo->prepare('INSERT INTO addresses (user_id, line1, city, state, postal_code) VALUES (?,?,?,?,?)');
+        $st = $pdo->prepare("INSERT INTO addresses (user_id, line1, city, state, postal_code, country) VALUES (?,?,?,?,?,'MY')");
         $st->execute([$users[$email], $l1, $city, $state, $zip]);
         $addr[$email] = (int)$pdo->lastInsertId();
     };
@@ -136,32 +138,36 @@ function seed(PDO $pdo): void {
     $mkAddr('ivy@demo.test',   '66 Jln Bahagia',            'Keningau',      'SBH', '89000');
     $mkAddr('jack@demo.test',  '1 Jln Baru',                'Putatan',       'SBH', '88200');
 
-    // ---- subscriptions with realistic cycle dates ----
+    // ---- subscriptions with realistic, future-dated cycles ----
+    // Anchor: 1st of NEXT month (change window open) or 1st of THIS month (dunning cases).
+    // created_at is back-dated by tenure so churn/forecast math has real history.
     $subs = [];
-    $mkSub = function (string $email, string $plan, int $back_days, string $status = 'active', int $period = 30)
-             use (&$subs, $users, $plans, $addr, $pdo, $today, $d) {
-        $start = $d(-$back_days);
-        $end   = $d(-$back_days + $period);
+    $firstLast = (clone $now)->modify('first day of last month')->format('Y-m-d');
+    $firstThis = (clone $now)->modify('first day of this month')->format('Y-m-d');
+    $firstNext = (clone $now)->modify('first day of next month')->format('Y-m-d');
+    $mkSub = function (string $email, string $plan, int $tenureDays, string $status = 'active', string $anchor = 'next')
+             use (&$subs, $users, $plans, $addr, $pdo, $firstLast, $firstThis, $firstNext) {
+        $next = $anchor === 'current' ? $firstThis : $firstNext;
         $st = $pdo->prepare(
-            'INSERT INTO subscriptions (user_id, plan_id, address_id, status, current_period_start, current_period_end, next_charge_at)
-             VALUES (?,?,?,?,?,?,?)'
+            'INSERT INTO subscriptions (user_id, plan_id, address_id, status, current_period_start, current_period_end, next_charge_at, created_at)
+             VALUES (?,?,?,?,?,?,?, DATE_SUB(?, INTERVAL ? DAY))'
         );
-        $st->execute([$users[$email], $plans[$plan], $addr[$email], $status, $start, $end, $end]);
+        $st->execute([$users[$email], $plans[$plan], $addr[$email], $status, $firstLast, $next, $next, $next, $tenureDays]);
         $subs[$email] = (int)$pdo->lastInsertId();
     };
-    $mkSub('alice@demo.test', 'Snack Box',  120, 'active');
-    $mkSub('bob@demo.test',   'Snack Box',  240, 'active');
-    $mkSub('carol@demo.test', 'Beauty Box',  90, 'active');
-    $mkSub('dave@demo.test',  'Coffee Club', 15, 'active');
-    $mkSub('erin@demo.test',  'Beauty Box',  60, 'active');
-    $mkSub('frank@demo.test', 'Coffee Club', 300, 'active');
-    $mkSub('grace@demo.test', 'Snack Box',   75, 'paused', 60);
-    $mkSub('henry@demo.test', 'Snack Box',  180, 'active');
-    $mkSub('ivy@demo.test',   'Beauty Box',  150, 'active');
-    $mkSub('jack@demo.test',  'Coffee Club',  5, 'active');
+    $mkSub('alice@demo.test', 'Snack Box',  120);
+    $mkSub('bob@demo.test',   'Snack Box',  240, 'active', 'current');   // ← failed payments → dunning
+    $mkSub('carol@demo.test', 'Beauty Box',  90);
+    $mkSub('dave@demo.test',  'Coffee Club', 15);
+    $mkSub('erin@demo.test',  'Beauty Box',  60);
+    $mkSub('frank@demo.test', 'Coffee Club', 300);
+    $mkSub('grace@demo.test', 'Snack Box',   75, 'paused');
+    $mkSub('henry@demo.test', 'Snack Box',  180);
+    $mkSub('ivy@demo.test',   'Beauty Box',  150, 'active', 'current');  // ← failed payments → dunning
+    $mkSub('jack@demo.test',  'Coffee Club',  5);
 
     // ---- customizations (swaps already applied) ----
-    $mkCust = function (string $email, string $fieldId, string $value) use ($subs, $pdo) {
+    $mkCust = function (string $email, int|string $fieldId, string $value) use ($subs, $pdo) {
         $st = $pdo->prepare('INSERT INTO customizations (subscription_id, field_id, field_value) VALUES (?,?,?)');
         $st->execute([$subs[$email], $fieldId, $value]);
     };
@@ -214,8 +220,8 @@ function seed(PDO $pdo): void {
     $mkPay('grace@demo.test', 'succeeded', 29.99, 20);
     $mkPay('jack@demo.test',  'succeeded', 24.50, 2);
 
-    // ---- current-month box line items / packing visibility ----
-    $cycle = (clone $now)->modify('first day of this month')->format('Y-m-d');
+    // ---- upcoming-cycle box line items (aligns with next_charge_at = 1st of next month) ----
+    $cycle = $firstNext;
     $mkLine = function (string $email, string $item, string $sku, float $price, int $qty = 1, string $kind = 'base')
               use ($subs, $pdo, $cycle) {
         $st = $pdo->prepare(

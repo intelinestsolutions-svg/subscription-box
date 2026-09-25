@@ -44,7 +44,8 @@ switch ($action) {
              FROM subscriptions s JOIN plans p ON p.id = s.plan_id
              WHERE s.status = "active" AND s.next_charge_at = ?
                AND NOT EXISTS (SELECT 1 FROM skip_requests sk WHERE sk.subscription_id = s.id AND sk.cycle_date = s.next_charge_at)
-             ORDER BY s.plan_id, u.name'
+               AND ' . NOT_IN_DUNNING_SQL . '
+             ORDER BY s.plan_id, s.id'
         );
         $subs->execute([$cycle, $cycle]);
         $subs = $subs->fetchAll();

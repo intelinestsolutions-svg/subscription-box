@@ -1,0 +1,2 @@
+# Block direct web access to generated files unless you intend them public
+Require all denied

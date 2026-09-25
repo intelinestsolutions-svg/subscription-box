@@ -40,8 +40,14 @@ try {
     exit;
 }
 
-// ---- Storage dir ----
-if (!is_dir($config['storage_dir'])) { @mkdir($config['storage_dir'], 0775, true); }
+// ---- Storage dir (self-healing: labels + logs + web-denial .htaccess) ----
+$storage = rtrim((string)$config['storage_dir'], '/');
+foreach (['', '/labels', '/logs'] as $d) {
+    if (!is_dir($storage . $d)) { @mkdir($storage . $d, 0775, true); }
+}
+if (!is_file($storage . '/.htaccess')) {
+    @file_put_contents($storage . '/.htaccess', "Require all denied\n");
+}
 
 // ---- Helpers ----
 function json_out(mixed $data, int $code = 200): never {

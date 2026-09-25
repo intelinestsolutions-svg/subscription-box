@@ -8,7 +8,7 @@ require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/lib.php';
 
 $user = require_auth(['subscriber']);
-if ($_GET['action'] ?? '' !== 'checkout') json_err('Unknown action.');
+if (($_GET['action'] ?? '') !== 'checkout') json_err('Unknown action.');
 
 $in = body();
 $sub = my_sub((int)($in['subscription_id'] ?? 0), (int)$user['id']);
@@ -30,7 +30,7 @@ foreach ($items as $it) { if ($it['kind'] === 'addon') $addonSum += (float)$it['
 $total = round($base + $addonSum, 2);
 
 require_once __DIR__ . '/billing/Provider.php';
-$provider = BillingProvider::make($GLOBALS['config']);
+$provider = BillingProviderFactory::make($GLOBALS['config']);
 $res = $provider->charge($user, $plan['name'] . ' — cycle ' . $win['cycle'], $total,
                          ['force_fail' => !empty($in['force_fail'])]);
 

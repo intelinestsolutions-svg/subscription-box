@@ -22,7 +22,7 @@ switch ($action) {
         $skipCount  = (int)$q('SELECT COUNT(*) FROM skip_requests WHERE cycle_date >= CURRENT_DATE()');
         $atRisk     = (int)$q('SELECT COUNT(*) FROM churn_scores cs WHERE cs.score >= 60 AND cs.scored_at = (SELECT MAX(cs2.scored_at) FROM churn_scores cs2 WHERE cs2.subscription_id = cs.subscription_id)');
         $dunning    = (int)$q('SELECT COUNT(*) FROM subscriptions s WHERE s.status = "active" AND EXISTS (SELECT 1 FROM payments pe WHERE pe.subscription_id = s.id AND pe.status = "failed") AND NOT EXISTS (SELECT 1 FROM payments pe2 WHERE pe2.subscription_id = s.id AND pe2.status = "succeeded" AND pe2.created_at > (SELECT MAX(pe3.created_at) FROM payments pe3 WHERE pe3.subscription_id = s.id AND pe3.status = "failed"))');
-        $toShip     = (int)$q("SELECT COUNT(*) FROM subscriptions s WHERE s.status = 'active' AND s.next_charge_at = DATE_FORMAT(CURDATE(), '%Y-%m-01') AND NOT EXISTS (SELECT 1 FROM skip_requests sk WHERE sk.subscription_id = s.id AND sk.cycle_date = s.next_charge_at) AND NOT EXISTS (SELECT 1 FROM shipments sh WHERE sh.subscription_id = s.id AND sh.cycle_date = s.next_charge_at)");
+        $toShip     = (int)$q("SELECT COUNT(*) FROM subscriptions s WHERE s.status = 'active' AND s.next_charge_at = DATE_FORMAT(CURDATE(), '%Y-%m-01') AND NOT EXISTS (SELECT 1 FROM skip_requests sk WHERE sk.subscription_id = s.id AND sk.cycle_date = s.next_charge_at) AND NOT EXISTS (SELECT 1 FROM shipments sh WHERE sh.subscription_id = s.id AND sh.cycle_date = s.next_charge_at) AND " . NOT_IN_DUNNING_SQL);
 
         json_out([
             'active_subscribers' => $activeSubs,

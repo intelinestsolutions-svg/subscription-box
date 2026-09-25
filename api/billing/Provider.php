@@ -49,7 +49,7 @@ final class StripeProvider implements BillingProvider
     }
 }
 
-final class BillingProvider
+final class BillingProviderFactory
 {
     public static function make(array $config): BillingProvider
     {

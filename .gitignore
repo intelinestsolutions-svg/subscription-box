@@ -2,7 +2,12 @@
 api/config.local.php
 
 # Runtime artifacts (notification logs, generated label CSVs, receipts)
-storage/
+storage/*
+!storage/.htaccess
+!storage/labels/
+!storage/logs/
+!storage/labels/.gitkeep
+!storage/logs/.gitkeep
 *.log
 
 # OS / editor noise

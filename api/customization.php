@@ -23,7 +23,8 @@ switch ($action) {
         $fields = $st->fetchAll();
         foreach ($fields as &$f) $f['options'] = json_decode($f['options_json'], true) ?: [];
 
-        $sub = my_sub((int)($in['subscription_id'] ?? 0), (int)$user['id']);
+        $subId = (int)($in['subscription_id'] ?? 0) ?: (int)($_GET['subscription_id'] ?? 0);
+        $sub = my_sub($subId, (int)$user['id']);
         $ch  = $GLOBALS['pdo']->prepare('SELECT field_id, field_value FROM customizations WHERE subscription_id = ?');
         $ch->execute([$sub['id']]);
         $choices = array_column($ch->fetchAll(), 'field_value', 'field_id');

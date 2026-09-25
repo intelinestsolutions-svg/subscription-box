@@ -9,6 +9,9 @@ function today(): string {
     return (new DateTime('now', new DateTimeZone($GLOBALS['config']['timezone'] ?? 'UTC')))->format('Y-m-d');
 }
 
+/** WHERE fragment: exclude subscriptions whose most recent payment attempt failed (in dunning). */
+const NOT_IN_DUNNING_SQL = "(SELECT pe.status FROM payments pe WHERE pe.subscription_id = s.id ORDER BY pe.created_at DESC LIMIT 1) <> 'failed'";
+
 /** The date on which changes freeze for a given cycle (shipping cutoff). */
 function cutoff_date_for(string $cycleDate, int $cutoffDay): string {
     $dt = new DateTime($cycleDate);

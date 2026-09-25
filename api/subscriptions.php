@@ -49,7 +49,7 @@ switch ($action) {
 
         // Demo checkout: first cycle is charged now via demo provider.
         require_once __DIR__ . '/billing/Provider.php';
-        $provider = BillingProvider::make($GLOBALS['config']);
+        $provider = BillingProviderFactory::make($GLOBALS['config']);
         $res = $provider->charge($user, $plan['name'], (float)$plan['price'], ['force_fail' => !empty($in['force_fail'])]);
         if (!$res['success']) json_err('Payment failed: ' . ($res['message'] ?? 'declined'), 402);
 

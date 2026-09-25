@@ -115,7 +115,8 @@ function send_next_stage(PDO $pdo, array $cfg, array $sub): array {
         return ['subscription_id' => (int)$sub['id'], 'skipped' => 'not due yet', 'next' => $nf];
     }
     $stage = $nf['stage'];
-    $link  = rtrim((string)$cfg['app_url'], '/') . '/subscriber/portal.html';
+    $email = (string)($sub['subscriber_email'] ?? $sub['email'] ?? '');
+    $link  = rtrim((string)($cfg['app_url'] ?? ''), '/') . '/subscriber/portal.html';
 
     $messages = [
         1 => "Hi {$sub['subscriber_name']}, your {$sub['plan_name']} payment of the next cycle failed. Update your payment method so we can keep your box coming: $link",
@@ -124,8 +125,8 @@ function send_next_stage(PDO $pdo, array $cfg, array $sub): array {
     ];
 
     $result = $nf['channel'] === 'sms'
-        ? Sender::sms($cfg, $sub['phone'], $messages[$stage])
-        : Sender::email($cfg, $sub['email'], $nf['subject'], $messages[$stage]);
+        ? Sender::sms($cfg, (string)($sub['phone'] ?? ''), $messages[$stage])
+        : Sender::email($cfg, $email, $nf['subject'], $messages[$stage]);
 
     $pay = $pdo->prepare('SELECT id FROM payments WHERE subscription_id = ? AND status = "failed" ORDER BY created_at DESC LIMIT 1');
     $pay->execute([$sub['id']]);
@@ -137,5 +138,5 @@ function send_next_stage(PDO $pdo, array $cfg, array $sub): array {
     $ins->execute([$sub['id'], $paymentId, $stage, $nf['channel'], $nf['subject'], $messages[$stage]]);
 
     return ['subscription_id' => (int)$sub['id'], 'stage' => $stage, 'channel' => $nf['channel'],
-            'to' => $nf['channel'] === 'sms' ? $sub['phone'] : $sub['email'], 'result' => $result];
+            'to' => $nf['channel'] === 'sms' ? (string)($sub['phone'] ?? '') : $email, 'result' => $result];
 }

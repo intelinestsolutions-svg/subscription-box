@@ -55,17 +55,6 @@ CREATE TABLE IF NOT EXISTS variant_fields (
   CONSTRAINT fk_vf_plan FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS customizations (
-  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  subscription_id INT UNSIGNED NOT NULL,
-  field_id        INT UNSIGNED NOT NULL,
-  field_value     VARCHAR(190) NOT NULL,
-  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_cust (subscription_id, field_id),
-  CONSTRAINT fk_cust_sub FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
-  CONSTRAINT fk_cust_field FOREIGN KEY (field_id) REFERENCES variant_fields(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
 CREATE TABLE IF NOT EXISTS subscriptions (
   id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id             INT UNSIGNED NOT NULL,
@@ -81,6 +70,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   KEY idx_sub_status (status),
   CONSTRAINT fk_sub_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_sub_plan FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS customizations (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  subscription_id INT UNSIGNED NOT NULL,
+  field_id        INT UNSIGNED NOT NULL,
+  field_value     VARCHAR(190) NOT NULL,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cust (subscription_id, field_id),
+  CONSTRAINT fk_cust_sub FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cust_field FOREIGN KEY (field_id) REFERENCES variant_fields(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS skip_requests (

@@ -36,6 +36,7 @@ switch ($action) {
                AND s.next_charge_at = ?
                AND NOT EXISTS (SELECT 1 FROM skip_requests sk WHERE sk.subscription_id = s.id AND sk.cycle_date = s.next_charge_at)
                AND NOT EXISTS (SELECT 1 FROM shipments sh WHERE sh.subscription_id = s.id AND sh.cycle_date = ?)
+               AND ' . NOT_IN_DUNNING_SQL . '
              ORDER BY u.name'
         );
         $rows->execute([$cycle, $cycle]);
@@ -56,7 +57,8 @@ switch ($action) {
              LEFT JOIN addresses a ON a.id = s.address_id
              WHERE s.status = "active" AND s.next_charge_at = ?
                AND NOT EXISTS (SELECT 1 FROM skip_requests sk WHERE sk.subscription_id = s.id AND sk.cycle_date = s.next_charge_at)
-               AND NOT EXISTS (SELECT 1 FROM shipments sh WHERE sh.subscription_id = s.id AND sh.cycle_date = ?)'
+               AND NOT EXISTS (SELECT 1 FROM shipments sh WHERE sh.subscription_id = s.id AND sh.cycle_date = ?)
+               AND ' . NOT_IN_DUNNING_SQL . ''
         );
         $rows->execute([$cycle, $cycle]);
         $rows = $rows->fetchAll();

@@ -82,6 +82,11 @@ function demo_validate(array $a): array {
         }
     }
 
+    // Postal code crammed into the street line.
+    if (preg_match('/\b\d{5}\b/', $fixed['line1'])) {
+        $issues[] = "A 5-digit postal code appears in the street line — remove it (postal code is its own field).";
+    }
+
     // Missing city.
     if ($fixed['city'] === '') $issues[] = 'City is required and was missing.';
 
