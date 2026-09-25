@@ -1,0 +1,18 @@
+# ----------------------------------------------------------------------
+# Studio Pro Subscription Box — cache policy
+# After a deploy, stale cached assets (e.g. old common.js + new index.html)
+# can break the UI ("page looks fine but buttons do nothing"). Force every
+# page, script and stylesheet to be re-checked on each load.
+# ----------------------------------------------------------------------
+
+Options -Indexes
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-cache, no-store, must-revalidate"
+  Header set Pragma "no-cache"
+</IfModule>
