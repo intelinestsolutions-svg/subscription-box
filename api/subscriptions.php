@@ -14,6 +14,12 @@ $in     = body();
 
 switch ($action) {
 
+    /** Public plan catalogue for enrollment. */
+    case 'plans': {
+        $st = $GLOBALS['pdo']->query('SELECT id, name, description, price, billing_interval FROM plans WHERE is_active = 1 ORDER BY price');
+        json_out($st->fetchAll());
+    }
+
     case 'list': {
         $st = $GLOBALS['pdo']->prepare(
             'SELECT s.*, p.name plan_name, p.price plan_price,

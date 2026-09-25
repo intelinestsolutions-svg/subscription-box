@@ -98,12 +98,17 @@ Add the matching keys to `api/config.local.php` and flip one line per concern.
 
 ## Deploying to Hostinger (test.prostudio.my and beyond)
 
-1. Upload the **project contents** (not the folder) into `public_html/` via File Manager or FTP.
-2. In hPanel → Databases → MySQL: create a DB + user, note the credentials.
-3. Edit `api/config.local.php` on the server: `db_*`, `app_url = https://test.prostudio.my`, `install_key`.
-4. Visit `https://test.prostudio.my/api/install.php?install_key=YOUR_KEY` once.
-5. Delete/rename `install.php` or remove the key afterwards for production. Set `demo_mode = false`
-   so only subscribers can self-register.
+`test.prostudio.my` is a subdomain whose document root is `prostudio.my/public_html/test`.
+Upload the **contents** of this project (not the `SBC-SubscriptionBox` folder itself) there, so the
+API lands at `https://test.prostudio.my/api/...`.
+
+1. In cPanel/hPanel File Manager → go to `public_html/test/`, upload the project contents.
+2. hPanel → Databases → MySQL: create a database + user, note the credentials.
+3. Edit `api/config.local.php` **on the server**: `db_*` (Hostinger creds), `install_key`.
+   (`app_url` is already `https://test.prostudio.my`.)
+4. Visit `https://test.prostudio.my/api/install.php?install_key=YOUR_KEY` once —
+   it creates the tables and seeds 12 demo users.
+5. For production: delete `install.php`, set `demo_mode = false`, and rotate the key.
 
 ## Staying safe
 

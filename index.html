@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBC Subscription Box Platform</title>
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div class="landing">
+  <div class="logo-lg">📦</div>
+  <h1>Subscription Box Management Platform</h1>
+  <p class="muted" style="margin-top:6px">Recurring physical products, done right — skip-a-month, box customization, add-on upsells, churn AI, inventory forecasting, dunning, packing & bulk shipping labels.</p>
+
+  <div class="role-grid">
+    <div class="role-card" data-role="subscriber"><div class="emoji">🎁</div><h3>Subscriber</h3><p class="muted" style="font-size:12px">Skip a month · customize your box · add-ons</p></div>
+    <div class="role-card" data-role="merchant"><div class="emoji">📊</div><h3>Merchant</h3><p class="muted" style="font-size:12px">Churn AI · forecasting · dunning</p></div>
+    <div class="role-card" data-role="ops"><div class="emoji">🏭</div><h3>Operations</h3><p class="muted" style="font-size:12px">Packing lists · shipping labels · addresses</p></div>
+  </div>
+
+  <p class="muted" style="font-size:13px">Demo accounts: <code>merchant@demo.test</code> · <code>ops@demo.test</code> · <code>alice@demo.test</code> (password <code>demo1234</code>)</p>
+</div>
+
+<div class="modal-backdrop" id="auth-modal" style="display:none">
+  <div class="modal">
+    <h2 id="auth-title">Log in</h2>
+    <form id="auth-form">
+      <div class="field" id="name-field" style="display:none"><label>Full name</label><input name="name" autocomplete="name"></div>
+      <div class="field"><label>Email</label><input name="email" type="email" required autocomplete="email" placeholder="you@example.com"></div>
+      <div class="field"><label>Password</label><input name="password" type="password" required minlength="6" autocomplete="current-password"></div>
+      <div class="field" id="role-field" style="display:none">
+        <label>I am a…</label>
+        <select name="role">
+          <option value="subscriber">Subscriber</option>
+          <option value="merchant">Merchant</option>
+          <option value="ops">Operations</option>
+        </select>
+      </div>
+      <div class="inline">
+        <button class="btn btn-primary" type="submit" id="auth-submit">Log in</button>
+        <button class="btn btn-ghost" type="button" id="switch-mode">New here? Register</button>
+        <button class="btn btn-ghost" type="button" id="close-modal">Close</button>
+      </div>
+      <div id="auth-msg" class="note" style="display:none"></div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/js/common.js"></script>
+<script>
+(function () {
+  const { $, $$, api, toast, setAuth, getUser } = window.SBC;
+  let mode = 'login';
+  let pendingRole = 'subscriber';
+
+  $$('.role-card').forEach(card => card.addEventListener('click', () => openAuth(card.dataset.role)));
+  $('#close-modal').addEventListener('click', () => $('#auth-modal').style.display = 'none');
+  $('#switch-mode').addEventListener('click', () => {
+    mode = mode === 'login' ? 'register' : 'login';
+    $('#auth-title').textContent = mode === 'login' ? 'Log in' : 'Create account';
+    $('#auth-submit').textContent = mode === 'login' ? 'Log in' : 'Register';
+    $('#name-field').style.display = mode === 'register' ? '' : 'none';
+    $('#role-field').style.display = (mode === 'register') ? '' : 'none';
+    $('#auth-msg').style.display = 'none';
+  });
+
+  function openAuth(role) {
+    pendingRole = role;
+    if ($('#role-field').style.display && $('#auth-form').role) $('#role-field').querySelector('select').value = role;
+    $('#auth-msg').style.display = 'none';
+    $('#auth-modal').style.display = 'grid';
+  }
+
+  $('#auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = { email: f.get('email').trim(), password: f.get('password') };
+    const msg = $('#auth-msg');
+    try {
+      let data;
+      if (mode === 'login') {
+        data = await api('auth.php?action=login', { method: 'POST', body });
+      } else {
+        body.name = f.get('name').trim();
+        body.role = f.get('role') || 'subscriber';
+        body.phone = '';
+        data = await api('auth.php?action=register', { method: 'POST', body });
+      }
+      setAuth(data.token, data.user);
+      toast('Welcome, ' + data.user.name + '!', 'ok');
+      window.location.href = data.user.role === 'merchant' ? 'merchant/dashboard.html'
+        : data.user.role === 'ops' ? 'ops/warehouse.html' : 'subscriber/portal.html';
+    } catch (err) {
+      msg.style.display = '';
+      msg.textContent = err.message;
+      msg.className = 'note warn';
+    }
+  });
+
+  if (getUser()) {
+    const u = JSON.parse(localStorage.getItem('sbc_user') || 'null');
+    if (u) window.location.href = u.role === 'merchant' ? 'merchant/dashboard.html' : u.role === 'ops' ? 'ops/warehouse.html' : 'subscriber/portal.html';
+  }
+})();
+</script>
+</body>
+</html>

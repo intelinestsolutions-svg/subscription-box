@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subscriber Portal — SBC</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+<script src="../assets/js/common.js"></script>
+<script>
+(function () {
+  const { $, $$, esc, fmtMoney, fmtDate, api, toast, statusBadge, requireRole, shell, roles } = window.SBC;
+  const user = requireRole('subscriber');
+  if (!user) return;
+  let subs = [];
+  let currentSub = null;
+
+  roles.subscriber = {
+    subs: viewSubs, custom: viewCustom, addons: viewAddons, profile: viewProfile,
+  };
+
+  async function loadSubs() { subs = await api('subscriptions.php?action=list'); return subs; }
+
+  /* ---------------- 🎁 My Subscriptions ---------------- */
+  async function viewSubs() {
+    const V = $('#view');
+    V.innerHTML = '<h1>My Subscriptions</h1><div class="muted" style="margin-bottom:14px">Skip a month, pause, or cancel — changes apply before the shipping cutoff.</div>';
+    const wrap = document.createElement('div');
+    V.appendChild(wrap);
+    subs = await loadSubs();
+    if (!subs.length) {
+      wrap.innerHTML = '<div class="card empty">No subscriptions yet — pick a plan below.</div>';
+    } else {
+      subs.forEach(s => {
+        const win = s.changes_window || {};
+        const skipped = !!s.skip_pending;
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML =
+          '<div class="inline" style="justify-content:space-between"><h2>' + esc(s.plan_name) + ' ' + statusBadge(s.status) + '</h2>' +
+          '<span class="muted">' + fmtMoney(s.plan_price) + '/mo</span></div>' +
+          '<p class="muted" style="font-size:12.5px">Next charge: <b>' + fmtDate(s.next_charge_at) + '</b> · ' +
+          (skipped ? '<span class="badge danger">Skipped — no box this cycle</span>' : 'Changes window: <b>' + (win.immediate ? 'OPEN (until ' + fmtDate(win.deadline) + ')' : 'closed — applies from ' + fmtDate(win.cycle)) + '</b>') + '</p>' +
+          '<div class="inline" style="margin-top:10px">' +
+          (skipped
+            ? '<button class="btn btn-sm" data-act="undo" data-id="' + s.id + '">↩ Undo skip</button>'
+            : '<button class="btn btn-sm btn-primary" data-act="skip" data-id="' + s.id + '" ' + (win.immediate ? '' : 'disabled') + '>⏭ Skip this month</button>') +
+          '<button class="btn btn-sm" data-act="custom" data-id="' + s.id + '">🔄 Customize</button>' +
+          '<button class="btn btn-sm" data-act="addons" data-id="' + s.id + '">🛒 Add-ons</button>' +
+          (s.status === 'active' ? '<button class="btn btn-sm" data-act="pause" data-id="' + s.id + '">⏸ Pause</button>' : '<button class="btn btn-sm" data-act="resume" data-id="' + s.id + '">▶ Resume</button>') +
+          '<button class="btn btn-sm btn-danger" data-act="cancel" data-id="' + s.id + '">✕ Cancel</button>' +
+          '</div>';
+        wrap.appendChild(el);
+      });
+    }
+    wrap.insertAdjacentHTML('beforeend',
+      '<div class="card"><h2>Start another subscription</h2><p class="muted" style="font-size:12.5px;margin-bottom:10px">Choose a plan — your first cycle is billed now (demo provider).</p>' +
+      '<div class="inline"><select id="new-plan"></select><button class="btn btn-primary btn-sm" id="sub-create">Subscribe</button></div></div>');
+    const plans = await api('subscriptions.php?action=plans');
+    $('#new-plan').innerHTML = plans.map(p => '<option value="' + p.id + '">' + esc(p.name) + ' — ' + fmtMoney(p.price) + '/mo</option>').join('');
+    $('#sub-create').addEventListener('click', async () => {
+      try { await api('subscriptions.php?action=create', { method: 'POST', body: { plan_id: +$('#new-plan').value } }); toast('Subscribed! 🎉', 'ok'); viewSubs(); } catch (e) { toast(e.message, 'err'); }
+    });
+
+    $$('[data-act]', wrap).forEach(btn => btn.addEventListener('click', async () => {
+      const act = btn.dataset.act, id = +btn.dataset.id;
+      const s = subs.find(x => x.id === id);
+      try {
+        if (act === 'skip') {
+          if (!confirm('Skip your next box (' + fmtDate(s.next_charge_at) + ')? You won\'t be charged.')) return;
+          await api('skips.php?action=create', { method: 'POST', body: { subscription_id: id, reason: 'Skip this month' } });
+          toast('Skipped — see you next cycle!', 'ok');
+        } else if (act === 'undo') {
+          const skip = (await api('skips.php?action=list')).find(x => x.subscription_id === id);
+          await api('skips.php?action=undo', { method: 'POST', body: { id: skip.id } });
+          toast('Skip removed.', 'ok');
+        } else if (act === 'pause') { await api('subscriptions.php?action=pause', { method: 'POST', body: { subscription_id: id } }); toast('Paused after this cycle.', 'ok'); }
+        else if (act === 'resume') { await api('subscriptions.php?action=resume', { method: 'POST', body: { subscription_id: id } }); toast('Resumed.', 'ok'); }
+        else if (act === 'cancel') { if (confirm('Cancel this subscription permanently?')) { await api('subscriptions.php?action=cancel', { method: 'POST', body: { subscription_id: id } }); toast('Canceled.', 'ok'); } else return; }
+        else if (act === 'custom') { currentSub = s; switchViews(viewCustom); return; }
+        else if (act === 'addons') { currentSub = s; switchViews(viewAddons); return; }
+        viewSubs();
+      } catch (e) { toast(e.message, 'err'); }
+    }));
+  }
+
+  /* ---------------- 🔄 Customize My Box ---------------- */
+  async function viewCustom() {
+    const V = $('#view');
+    V.innerHTML = '<h1>Customize My Box</h1><div class="muted" style="margin-bottom:14px">Swap variants before the monthly shipping cutoff — your choice persists to every future box.</div>';
+    if (!subs.length) subs = await loadSubs();
+    if (!subs.length) { V.insertAdjacentHTML('beforeend', '<div class="card empty">No subscriptions to customize.</div>'); return; }
+    const id = currentSub ? currentSub.id : subs[0].id;
+    const picker = '<div class="card"><label>Subscription</label><select id="custom-sub">' + subs.map(s => '<option value="' + s.id + '"' + (s.id === id ? ' selected' : '') + '>' + esc(s.plan_name) + '</option>').join('') + '</select></div>';
+    const box = document.createElement('div');
+    V.insertAdjacentHTML('beforeend', picker);
+    V.appendChild(box);
+
+    async function render() {
+      const subId = +$('#custom-sub').value;
+      const data = await api('customization.php?action=fields&plan_id=' + (subs.find(s => s.id === subId) || {}).plan_id + '&subscription_id=' + subId);
+      const open = data.window.immediate;
+      box.innerHTML = '<div class="card"><h2>Swap options</h2>' +
+        (open ? '<div class="note">Window open — changes apply to <b>' + fmtDate(data.window.cycle) + '</b>. Deadline: ' + fmtDate(data.window.deadline) + '.</div>'
+              : '<div class="note warn">Window closed for ' + fmtDate(data.window.cycle) + ' — swaps apply from <b>' + fmtDate(data.window.deadline) + '</b>.</div>') +
+        data.fields.map(f => '<div class="field"><label>' + esc(f.field_label) + '</label><select data-field="' + f.id + '">' +
+          f.options.map(o => '<option' + (String(data.choices[f.id]) === o ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select></div>').join('') +
+        '<button class="btn btn-primary" id="save-swaps" ' + (open ? '' : 'disabled') + '>Save swaps</button></div>';
+      $('#save-swaps').addEventListener('click', async () => {
+        const choices = {};
+        $$('[data-field]', box).forEach(sel => choices[sel.dataset.field] = sel.value);
+        try { const r = await api('customization.php?action=save', { method: 'POST', body: { subscription_id: subId, choices } }); toast('Swaps saved for ' + fmtDate(r.cycle) + ' ✅', 'ok'); render(); } catch (e) { toast(e.message, 'err'); }
+      });
+    }
+    $('#custom-sub').addEventListener('change', render);
+    render();
+  }
+
+  /* ---------------- 🛒 Add-On Shop ---------------- */
+  async function viewAddons() {
+    const V = $('#view');
+    V.innerHTML = '<h1>Add-On Shop</h1><div class="muted" style="margin-bottom:14px">One-off items ride along in your next box — no extra shipping fee.</div>';
+    if (!subs.length) subs = await loadSubs();
+    if (!subs.length) { V.insertAdjacentHTML('beforeend', '<div class="card empty">No subscriptions.</div>'); return; }
+    const id = currentSub ? currentSub.id : subs[0].id;
+    V.insertAdjacentHTML('beforeend', '<div class="card"><label>Subscription</label><select id="addon-sub">' + subs.map(s => '<option value="' + s.id + '"' + (s.id === id ? ' selected' : '') + '>' + esc(s.plan_name) + '</option>').join('') + '</select></div>');
+    const box = document.createElement('div');
+    V.appendChild(box);
+
+    async function render() {
+      const subId = +$('#addon-sub').value;
+      const data = await api('addons.php?action=list&subscription_id=' + subId);
+      const open = data.window.immediate;
+      const cartRows = data.in_next_box || [];
+      const base = (subs.find(s => s.id === subId) || { plan_price: 0 }).plan_price;
+      const addonSum = cartRows.reduce((a, r) => a + (+r.total_price || 0), 0);
+      box.innerHTML =
+        '<div class="grid-2">' +
+        '<div class="card"><h2>Available add-ons</h2>' +
+        (open ? '<div class="note">Fits in your <b>' + fmtDate(data.window.cycle) + '</b> box.</div>' : '<div class="note warn">Window closed — these go in the box after next.</div>') +
+        '<div class="shop-grid">' + (data.addons || []).map(a =>
+          '<div class="shop-item"><b>' + esc(a.name) + '</b><span class="muted" style="font-size:12px">' + esc(a.description || '') + '</span>' +
+          '<span class="price">' + fmtMoney(a.price) + '</span><button class="btn btn-sm btn-primary" data-add="' + a.id + '" ' + (open ? '' : 'disabled') + '>+ Add to box</button></div>').join('') + '</div></div>' +
+        '<div class="card"><h2>Upcoming box</h2><p class="muted" style="font-size:12.5px">Base box · ' + fmtDate(data.window.cycle) + '</p>' +
+        (cartRows.length ? cartRows.map(r => '<div class="inline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0"><span>' + esc(r.item_name) + ' ×' + r.qty + '</span><span class="inline">' + fmtMoney(r.total_price) + '<button class="btn btn-ghost btn-sm" data-rm="' + r.id + '">✕</button></span></div>').join('') : '<div class="empty">Nothing added yet.</div>') +
+        '<div style="margin-top:10px"><div class="inline" style="justify-content:space-between"><span class="muted">Subtotal (base + add-ons)</span><b>' + fmtMoney(base + addonSum) + '</b></div></div>' +
+        '<div class="inline" style="margin-top:12px"><button class="btn btn-primary" id="checkout" ' + (cartRows.length ? '' : 'disabled') + '>💳 Checkout ' + fmtMoney(base + addonSum) + '</button>' +
+        '<label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="force-fail" style="width:auto"> Simulate card decline</label></div>' +
+        '<div id="receipt" style="margin-top:10px"></div></div></div>';
+
+      $$('[data-add]', box).forEach(b => b.addEventListener('click', async () => {
+        try { const r = await api('addons.php?action=add', { method: 'POST', body: { subscription_id: subId, addon_id: +b.dataset.add } }); toast('Added: ' + r.added + ' 🛒', 'ok'); render(); } catch (e) { toast(e.message, 'err'); }
+      }));
+      $$('[data-rm]', box).forEach(b => b.addEventListener('click', async () => {
+        try { await api('addons.php?action=remove', { method: 'POST', body: { line_item_id: +b.dataset.rm } }); toast('Removed.', 'ok'); render(); } catch (e) { toast(e.message, 'err'); }
+      }));
+      $('#checkout').addEventListener('click', async () => {
+        try {
+          const r = await api('checkout.php?action=checkout', { method: 'POST', body: { subscription_id: subId, force_fail: $('#force-fail').checked } });
+          const rc = r.receipt;
+          $('#receipt').innerHTML = '<div class="note">Paid ' + fmtMoney(rc.total) + ' ✓ Ref ' + esc(rc.ref) + ' — receipt for ' + fmtDate(rc.cycle) + '.</div>';
+          toast('Payment succeeded!', 'ok'); render();
+        } catch (e) { toast(e.message, 'err'); render(); }
+      });
+    }
+    $('#addon-sub').addEventListener('change', render);
+    render();
+  }
+
+  /* ---------------- 👤 Profile & Address ---------------- */
+  async function viewProfile() {
+    const V = $('#view');
+    V.innerHTML = '<h1>Profile & Delivery Address</h1><div class="muted" style="margin-bottom:14px">Addresses are screened & corrected automatically to cut return-to-sender costs.</div>';
+    const me = await api('auth.php?action=me');
+    const a = me.address || {};
+    const html = '<div class="card"><h2>Delivery address</h2>' +
+      '<div class="field"><label>Street address</label><input id="p-line1" value="' + esc(a.line1 || '') + '"></div>' +
+      '<div class="field"><label>Line 2 (optional)</label><input id="p-line2" value="' + esc(a.line2 || '') + '"></div>' +
+      '<div class="inline" style="align-items:start"><div class="field" style="flex:2"><label>City</label><input id="p-city" value="' + esc(a.city || '') + '"></div>' +
+      '<div class="field" style="flex:1"><label>State</label><input id="p-state" value="' + esc(a.state || '') + '"></div>' +
+      '<div class="field" style="flex:1"><label>Postal code</label><input id="p-zip" value="' + esc(a.postal_code || '') + '"></div></div>' +
+      '<div class="inline"><button class="btn btn-primary" id="p-validate">🔍 Validate & save</button></div>' +
+      '<div id="addr-result" style="margin-top:12px"></div></div>';
+    V.insertAdjacentHTML('beforeend', html);
+    $('#p-validate').addEventListener('click', async () => {
+      const body = { line1: $('#p-line1').value, line2: $('#p-line2').value, city: $('#p-city').value, state: $('#p-state').value, postal_code: $('#p-zip').value, save: true, user_id: user.id };
+      try {
+        const r = await api('address.php?action=validate', { method: 'POST', body });
+        const addr = r.address || {};
+        $('#addr-result').innerHTML = '<div class="note ' + (r.valid ? '' : 'warn') + '">' + (r.valid ? '✅ Address verified (score ' + r.score + ')' : '⚠️ Needs attention (score ' + r.score + ')') +
+          '<br>Normalized: ' + esc([addr.line1, addr.city, addr.state, addr.postal_code].filter(Boolean).join(', ')) + '</div>' +
+          (r.issues && r.issues.length ? '<div class="note warn">' + r.issues.map(i => '• ' + esc(i)).join('<br>') + '</div>' : '') +
+          (r.source && r.source !== 'demo' ? '<p class="muted" style="font-size:12px">Checked with: ' + esc(r.source) + '</p>' : '');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+  }
+
+  shell('subscriber', 'subs');
+  viewSubs();
+})();

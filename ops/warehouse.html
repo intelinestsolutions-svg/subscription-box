@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operations Console — SBC</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+<script src="../assets/js/common.js"></script>
+<script>
+(function () {
+  const { $, $$, esc, fmtMoney, fmtDate, api, toast, requireRole, shell, roles } = window.SBC;
+  const user = requireRole('merchant', 'ops');
+  if (!user) return;
+
+  roles.ops = { packing: viewPacking, shipping: viewShipping, address: viewAddress };
+
+  const thisCycle = (() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-01'; })();
+
+  /* ---------------- 📋 Packing Lists ---------------- */
+  async function viewPacking() {
+    const V = $('#view');
+    V.innerHTML = '<div class="page-head"><div><h1>Kitting & Packing Lists</h1><div class="sub">Exactly which items go in which box variant, plus aggregated pick quantities for the warehouse.</div></div>' +
+      '<button class="btn btn-primary" id="pk-gen">⚙️ Generate for ' + esc(thisCycle) + '</button></div><div id="pk-out"></div>';
+    async function render() {
+      const runs = await api('packing.php?action=runs');
+      const wrap = $('#pk-out');
+      wrap.innerHTML = '<div class="card"><h2>Previous runs</h2>' + (runs.length ?
+        '<table><thead><tr><th>Cycle</th><th>Plan</th><th>Boxes</th><th>Status</th><th></th></tr></thead><tbody>' +
+        runs.map(r => '<tr><td>' + esc(r.cycle_date) + '</td><td>' + esc(r.plan_name) + '</td><td>' + r.total_boxes + '</td><td><span class="badge ' + (r.status === 'done' ? 'ok' : 'muted') + '">' + esc(r.status) + '</span></td>' +
+        '<td><button class="btn btn-sm" data-items="' + r.id + '">View items</button></td></tr>').join('') + '</tbody></table>' :
+        '<div class="empty">No packing runs yet — generate one.</div>') + '</div>';
+      $$('[data-items]', wrap).forEach(b => b.addEventListener('click', async () => {
+        const items = await api('packing.php?action=items&run_id=' + b.dataset.items);
+        toast(items.map(i => i.qty + '× ' + i.item_name).join(' · '), '');
+      }));
+    }
+    $('#pk-gen').addEventListener('click', async () => {
+      $('#pk-gen').disabled = true;
+      try {
+        const r = await api('packing.php?action=generate', { method: 'POST', body: { cycle: thisCycle } });
+        $('#pk-out').insertAdjacentHTML('afterbegin',
+          r.plans.map(p => '<div class="card"><h2>' + esc(p.plan_name) + ' <span class="badge brand">' + p.total_boxes + ' boxes</span></h2>' +
+          '<div class="grid-2"><div><h3 style="margin-bottom:8px">Pick quantities</h3>' +
+          '<table><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>' + Object.entries(p.quantities || {}).map(([k, v]) => '<tr><td>' + esc(k) + '</td><td><b>' + v + '</b></td></tr>').join('') + '</tbody></table></div>' +
+          '<div><h3 style="margin-bottom:8px">Per-box breakdown</h3><div class="mono" style="font-size:12px;max-height:240px;overflow:auto">' +
+          p.boxes.map(b => 'Box #' + b.subscription_id + ' — <b>' + esc(b.variant) + '</b>' + (b.addons && b.addons !== '—' ? ' · + ' + esc(b.addons) : '') + '<br>').join('') + '</div></div></div></div>').join('') || '<div class="empty">' + esc(r.note || 'Nothing to pack.') + '</div>');
+        await render();
+      } catch (e) { toast(e.message, 'err'); }
+      $('#pk-gen').disabled = false;
+    });
+    render();
+  }
+
+  /* ---------------- 🚚 Shipping Labels ---------------- */
+  async function viewShipping() {
+    const V = $('#view');
+    V.innerHTML = '<div class="page-head"><div><h1>Bulk Shipping Labels</h1><div class="sub">One run purchases labels for the whole cycle via DHL · FedEx · or local-courier CSV.</div></div></div><div id="sh-out"></div>';
+    async function render() {
+      const [carriers, queue, ships] = await Promise.all([
+        api('shipping.php?action=carriers'),
+        api('shipping.php?action=queue&cycle=' + thisCycle),
+        api('shipping.php?action=shipments'),
+      ]);
+      $('#sh-out').innerHTML =
+        '<div class="card inline"><span class="muted">Carriers:</span>' +
+        carriers.map(c => '<span class="badge ' + (c.configured ? 'ok' : 'muted') + '">' + esc(c.name) + (c.configured ? ' ✓' : ' (no key)') + '</span>').join(' ') +
+        '</div>' +
+        '<div class="card"><div class="inline" style="justify-content:space-between"><h2>Ship queue — ' + esc(thisCycle) + '</h2>' +
+        '<div class="inline"><select id="sh-carrier">' + carriers.map(c => '<option value="' + c.id + '"' + (c.id === 'local_csv' ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('') + '</select>' +
+        '<button class="btn btn-primary" id="sh-gen">🏷 Generate ' + queue.count + ' labels</button></div></div>' +
+        '<div class="note">Shipments are blocked for subscriptions with <b>unvalidated addresses</b> (address tool below / shipping with force).</div>' +
+        '<div class="table-wrap"><table><thead><tr><th>Subscriber</th><th>Plan</th><th>Address</th><th>Validated</th></tr></thead><tbody>' +
+        (queue.rows.length ? queue.rows.map(r => '<tr><td><b>' + esc(r.name) + '</b><br><span class="muted mono">' + esc(r.email) + '</span></td><td>' + esc(r.plan_name) + '</td>' +
+          '<td class="muted" style="font-size:12px">' + esc([r.line1, r.city, r.state, r.postal_code].filter(Boolean).join(', ')) + '</td>' +
+          '<td>' + (r.validated ? '<span class="badge ok">✓ validated</span>' : '<span class="badge danger">unvalidated</span>') + '</td></tr>').join('') :
+          '<tr><td colspan="4"><div class="empty">Queue empty — everyone has labels or no one ships this cycle.</div></td></tr>') + '</tbody></table></div>' +
+        '<div id="sh-result" style="margin-top:12px"></div></div>' +
+        '<div class="card"><h2>Shipment history</h2><div class="table-wrap"><table><thead><tr><th>Subscriber</th><th>Cycle</th><th>Carrier</th><th>Tracking</th><th>Cost</th><th>Status</th></tr></thead><tbody>' +
+        (ships.length ? ships.map(s => '<tr><td>' + esc(s.subscriber_name) + '</td><td>' + esc(s.cycle_date) + '</td><td><span class="badge brand">' + esc(s.carrier) + '</span></td><td class="mono">' + esc(s.tracking_number) + '</td><td>' + fmtMoney(s.cost) + '</td><td><span class="badge ' + (s.status === 'delivered' ? 'ok' : 'warn') + '">' + esc(s.status) + '</span></td></tr>').join('') :
+          '<tr><td colspan="6"><div class="empty">No labels purchased yet.</div></td></tr>') + '</tbody></table></div></div>';
+
+      $('#sh-gen').addEventListener('click', async () => {
+        $('#sh-gen').disabled = true;
+        try {
+          const r = await api('shipping.php?action=generate', { method: 'POST', body: { cycle: thisCycle, carrier: $('#sh-carrier').value } });
+          $('#sh-result').innerHTML = r.generated
+            ? '<div class="note">✅ ' + r.generated + ' label(s) purchased via <b>' + esc(r.carrier) + '</b>' + (r.failed ? ' · ' + r.failed + ' failed' : '') + (r.carrier === 'local_csv' ? ' — CSV ready in storage/labels/' + thisCycle.replace(/-/g, '') + '-labels.csv' : '') + '</div>' +
+              (r.errors && r.errors.length ? r.errors.map(e => '<p class="muted mono" style="font-size:11px">• ' + esc(e.name) + ': ' + esc(e.message) + '</p>').join('') : '')
+            : '<div class="note warn">' + esc(r.note || 'Nothing generated.') + '</div>';
+          toast(r.generated ? r.generated + ' labels generated' : '0 generated', r.generated ? 'ok' : 'err');
+          render();
+        } catch (e) { $('#sh-result').innerHTML = '<div class="note warn">' + esc(e.message) + '</div>'; }
+        $('#sh-gen').disabled = false;
+      });
+    }
+    render();
+  }
+
+  /* ---------------- 📍 Address Tool ---------------- */
+  async function viewAddress() {
+    const V = $('#view');
+    V.innerHTML = '<h1>Address Validation</h1><div class="muted" style="margin-bottom:14px">Screen any address before it ships — postal patterns, street-type typos, crammed lines.</div>' +
+      '<div class="card" style="max-width:560px"><div class="field"><label>Street address</label><input id="a-line1" placeholder="12 Jalan Sederhana"></div>' +
+      '<div class="field"><label>Line 2 (optional)</label><input id="a-line2"></div>' +
+      '<div class="inline" style="align-items:start"><div class="field" style="flex:2"><label>City</label><input id="a-city" placeholder="Kota Kinabalu"></div>' +
+      '<div class="field" style="flex:1"><label>State</label><input id="a-state" placeholder="SBH"></div>' +
+      '<div class="field" style="flex:1"><label>Postal code</label><input id="a-zip" placeholder="88000"></div></div>' +
+      '<div class="field"><label>Country</label><select id="a-country"><option value="MY">Malaysia (MY)</option><option value="US">United States (US)</option></select></div>' +
+      '<button class="btn btn-primary" id="a-run">🔍 Validate</button><div id="a-result" style="margin-top:12px"></div></div>';
+    $('#a-run').addEventListener('click', async () => {
+      try {
+        const r = await api('address.php?action=validate', { method: 'POST', body: {
+          line1: $('#a-line1').value, line2: $('#a-line2').value, city: $('#a-city').value,
+          state: $('#a-state').value, postal_code: $('#a-zip').value, country: $('#a-country').value } });
+        const ad = r.address || {};
+        $('#a-result').innerHTML = '<div class="note ' + (r.valid ? '' : 'warn') + '">' + (r.valid ? '✅ Valid — score ' + r.score : '⚠️ ' + r.issues.length + ' issue(s) — score ' + r.score) +
+          '<br>Normalized: <b>' + esc([ad.line1, ad.city, ad.state, ad.postal_code].filter(Boolean).join(', ')) + '</b></div>' +
+          (r.issues && r.issues.length ? r.issues.map(i => '<div class="note warn">• ' + esc(i) + '</div>').join('') : '') +
+          (r.fallback && r.fallback.issues ? r.fallback.issues.map(i => '<div class="note warn">• ' + esc(i) + '</div>').join('') : '');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+  }
+
+  shell('ops', 'packing');
+  viewPacking();
+})();

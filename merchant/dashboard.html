@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merchant Dashboard — SBC</title>
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+<script src="../assets/js/common.js"></script>
+<script>
+(function () {
+  const { $, $$, esc, fmtMoney, fmtDate, api, toast, riskBadge, statusBadge, requireRole, shell, roles } = window.SBC;
+  const user = requireRole('merchant', 'ops');
+  if (!user) return;
+
+  roles.merchant = { kpis: viewKpis, churn: viewChurn, forecast: viewForecast, dunning: viewDunning, subs: viewSubs };
+
+  /* ---------------- 📊 Overview ---------------- */
+  async function viewKpis() {
+    const V = $('#view');
+    V.innerHTML = '<h1>Overview</h1>';
+    const s = await api('admin.php?action=summary');
+    V.insertAdjacentHTML('beforeend',
+      '<div class="kpis">' +
+      kpi('Active subscribers', s.active_subscribers) +
+      kpi('MRR', fmtMoney(s.mrr)) +
+      kpi('Paid this month', fmtMoney(s.paid_this_month)) +
+      kpi('At-risk (churn ≥ 60)', s.at_risk, 'warn') +
+      kpi('Dunning subjects', s.dunning_subjects, 'danger') +
+      kpi('To ship this cycle', s.to_ship_this_cycle) +
+      '</div>');
+    const rev = await api('admin.php?action=revenue');
+    const max = Math.max(1, ...rev.map(r => +r.total));
+    V.insertAdjacentHTML('beforeend',
+      '<div class="card"><h2>Revenue (last 6 months)</h2><div class="progress">' +
+      rev.map(r => '<div style="width:100%"><div class="bar" title="' + fmtMoney(r.total) + ' (' + r.count + ' payments)" style="height:' + Math.round((r.total / max) * 80) + 'px"></div><div class="bar-label">' + esc(r.ym.slice(5)) + '</div></div>').join('') +
+      '</div></div>');
+  }
+  function kpi(label, value, tone) {
+    return '<div class="kpi"><div class="label">' + label + '</div><div class="value" style="color:' + (tone === 'danger' ? 'var(--danger)' : tone === 'warn' ? 'var(--warn)' : '') + '">' + value + '</div></div>';
+  }
+
+  /* ---------------- ⚠️ Churn Alerts ---------------- */
+  async function viewChurn() {
+    const V = $('#view');
+    V.innerHTML = '<div class="page-head"><div><h1>Churn Prediction Alerts</h1><div class="sub">Scores 0–100 per subscriber. AI (free Colab/Ollama) with automatic rule-based fallback when the tunnel is down.</div></div>' +
+      '<div class="inline"><select id="churn-filter"><option value="">All risk levels</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>' +
+      '<button class="btn btn-primary" id="churn-run">🤖 Score all now</button></div></div>';
+    const wrap = document.createElement('div');
+    V.appendChild(wrap);
+    async function render() {
+      const risk = $('#churn-filter').value;
+      const rows = await api('churn.php?action=list' + (risk ? '&risk=' + risk : ''));
+      wrap.innerHTML = '<div class="card table-wrap"><table><thead><tr><th>Subscriber</th><th>Plan</th><th>Score</th><th>Risk</th><th>Source</th><th>Signal</th><th>Status</th></tr></thead><tbody>' +
+        (rows.length ? rows.map(r => {
+          let f = {};
+          try { f = JSON.parse(r.features_json || '{}'); } catch {}
+          return '<tr><td><b>' + esc(r.subscriber_name) + '</b><br><span class="muted mono">' + esc(r.subscriber_email) + '</span></td>' +
+          '<td>' + esc(r.plan_name) + '</td>' +
+          '<td><b>' + r.score + '</b>/100</td><td>' + riskBadge(r.risk) + '</td>' +
+          '<td><span class="badge ' + (r.source === 'ai' ? 'brand' : 'muted') + '">' + esc(r.source) + '</span></td>' +
+          '<td class="muted mono" style="font-size:11px">opens<u>' + (f.opens_30d ?? '?') + '</u> skips<u>' + (f.skips_90d ?? '?') + '</u> fails<u>' + (f.failed_payments ?? '?') + '</u> pymtUpd<u>' + (f.payment_updates_90d ?? '?') + '</u> login<u>' + (f.last_login_days ?? '?') + '</u>d</td>' +
+          '<td>' + statusBadge(r.status) + '</td></tr>';
+        }).join('') : '<tr><td colspan="7"><div class="empty">No scores yet — click “Score all now”.</div></td></tr>') + '</tbody></table></div>';
+    }
+    $('#churn-filter').addEventListener('change', render);
+    $('#churn-run').addEventListener('click', async () => {
+      $('#churn-run').disabled = true; $('#churn-run').textContent = 'Scoring… (AI may take ~10s each)';
+      try { const r = await api('churn.php?action=score_all', { method: 'POST' }); toast('Scored ' + r.scored + ' subscribers', 'ok'); await render(); }
+      catch (e) { toast(e.message, 'err'); }
+      $('#churn-run').disabled = false; $('#churn-run').textContent = '🤖 Score all now';
+    });
+    render();
+  }
+
+  /* ---------------- 📦 Inventory Forecast ---------------- */
+  async function viewForecast() {
+    const V = $('#view');
+    V.innerHTML = '<div class="page-head"><div><h1>Inventory Forecast</h1><div class="sub">Projected boxes per plan from active subs, growth, churn & skip rates + safety stock.</div></div></div>' +
+      '<div class="card inline" style="gap:14px"><div class="field" style="width:160px"><label>Months ahead</label><input type="number" id="f-months" value="6" min="1" max="12"></div>' +
+      '<div class="field" style="width:160px"><label>Safety stock %</label><input type="number" id="f-safety" value="10" min="0" max="50"></div>' +
+      '<button class="btn btn-primary" id="f-run" style="margin-top:20px">Calculate forecast</button></div><div id="f-out"></div>';
+    $('#f-run').addEventListener('click', async () => {
+      const q = 'action=forecast&months=' + $('#f-months').value + '&safety=' + $('#f-safety').value;
+      try {
+        const r = await api('forecast.php?' + q);
+        $('#f-out').innerHTML =
+          '<div class="note">Assumptions: skip rate <b>' + esc(r.assumptions.skip_rate) + '</b> · safety <b>' + esc(r.assumptions.safety_stock) + '</b> · growth ' + esc(r.assumptions.growth_mode) + ' · churn ' + esc(r.assumptions.churn_mode) + '</div>' +
+          r.plans.map(p => '<div class="card"><h2>' + esc(p.plan) + ' <span class="badge brand">' + p.active_subs + ' active</span>' +
+          ' <span class="badge muted">growth ' + p.growth_rate + '%</span> <span class="badge muted">churn ' + p.churn_rate + '%</span> <span class="badge muted">skip ' + p.skip_rate + '%</span></h2>' +
+          '<div class="table-wrap"><table><thead><tr><th>Month</th><th>Active subs</th><th>Expected boxes</th><th>Order quantity (+safety)</th></tr></thead><tbody>' +
+          p.projection.map(m => '<tr><td>' + esc(m.month) + '</td><td>' + m.active_subs + '</td><td>' + m.expected_boxes + '</td><td><b>' + m.ordered_qty + '</b> units</td></tr>').join('') +
+          '</tbody></table></div></div>').join('');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+    $('#f-run').click();
+  }
+
+  /* ---------------- 💳 Payment Recovery (Dunning) ---------------- */
+  async function viewDunning() {
+    const V = $('#view');
+    V.innerHTML = '<div class="page-head"><div><h1>Failed Payment Recovery</h1><div class="sub">3-stage sequence: email (day 2) · email (day 5) · SMS (day 8) — then the box is skipped.</div></div>' +
+      '<button class="btn btn-primary" id="dun-run">⚡ Run sequence for all subjects</button></div>';
+    const wrap = document.createElement('div');
+    V.appendChild(wrap);
+    async function render() {
+      const rows = await api('dunning.php?action=subjects');
+      wrap.innerHTML = '<div class="card table-wrap"><table><thead><tr><th>Subscriber</th><th>Plan</th><th>Failed</th><th>Days</th><th>Reason</th><th>Stage</th><th>Next</th></tr></thead><tbody>' +
+        (rows.length ? rows.map(r => '<tr><td><b>' + esc(r.subscriber_name) + '</b><br><span class="muted mono">' + esc(r.email || r.subscriber_email) + '</span><br><span class="muted mono">' + esc(r.phone || '') + '</span></td>' +
+          '<td>' + esc(r.plan_name) + '</td><td>' + fmtDate(r.last_failed_at) + '</td><td><b>' + r.days_since_failure + '</b></td><td class="mono">' + esc(r.failure_reason || '—') + '</td>' +
+          '<td>' + (r.stage_reached ? '<span class="badge brand">stage ' + r.stage_reached + '/3</span>' : '<span class="badge muted">not started</span>') + '</td>' +
+          '<td>' + (r.next_stage && r.next_stage.fired ? '<span class="badge danger">due now</span>' : (r.next_stage ? '<span class="badge muted">in ' + r.next_stage.due_in_days + 'd</span>' : '<span class="badge ok">complete</span>')) + '</td></tr>').join('') :
+          '<tr><td colspan="7"><div class="empty">No active dunning subjects 🎉</div></td></tr>') + '</tbody></table></div>' +
+        '<div class="card"><h2>Notification log (last 50)</h2><div class="mono" style="font-size:11.5px;max-height:220px;overflow:auto" id="dun-log">Loading…</div></div>';
+      const log = await api('dunning.php?action=log').catch(() => []);
+      $('#dun-log').innerHTML = log.length ? log.slice().reverse().map(e => esc(JSON.stringify(e)) + '<br>').join('') : '<span class="muted">Nothing sent yet — run the sequence.</span>';
+    }
+    $('#dun-run').addEventListener('click', async () => {
+      try { const r = await api('dunning.php?action=run', { method: 'POST', body: {} }); toast('Sent ' + r.sent.length + ' stage(s)', 'ok'); render(); }
+      catch (e) { toast(e.message, 'err'); }
+    });
+    render();
+  }
+
+  /* ---------------- 🧑 Subscribers ---------------- */
+  async function viewSubs() {
+    const V = $('#view');
+    V.innerHTML = '<div class="page-head"><div><h1>Subscribers</h1></div><input id="sub-q" placeholder="Search name / email / plan…" style="max-width:280px"></div><div id="sub-out"></div>';
+    async function render() {
+      const q = $('#sub-q').value;
+      const d = await api('admin.php?action=subscribers' + (q ? '&q=' + encodeURIComponent(q) : ''));
+      $('#sub-out').innerHTML = '<div class="card table-wrap"><table><thead><tr><th>Subscriber</th><th>Plan</th><th>Status</th><th>Next charge</th><th>Churn</th><th>Last payment</th><th>Address</th></tr></thead><tbody>' +
+        (d.rows.length ? d.rows.map(r => '<tr><td><b>' + esc(r.subscriber_name) + '</b><br><span class="muted mono">' + esc(r.subscriber_email) + '</span></td>' +
+          '<td>' + esc(r.plan_name) + ' ' + fmtMoney(r.plan_price) + '</td><td>' + statusBadge(r.status) + '</td><td>' + fmtDate(r.next_charge_at) + '</td>' +
+          '<td>' + (r.churn_score !== null ? '<b>' + r.churn_score + '</b> ' + riskBadge(r.churn_risk) : '<span class="badge muted">—</span>') + '</td>' +
+          '<td>' + (r.last_payment === 'succeeded' ? '<span class="badge ok">paid</span>' : r.last_payment === 'failed' ? '<span class="badge danger">failed</span>' : '<span class="badge muted">—</span>') + '</td>' +
+          '<td class="muted" style="font-size:12px">' + esc(r.address || '—') + (r.address_validated ? ' <span class="badge ok">✓</span>' : ' <span class="badge warn">unvalidated</span>') + '</td></tr>').join('') :
+          '<tr><td colspan="7"><div class="empty">No subscribers match.</div></td></tr>') + '</tbody></table></div><p class="muted">Page 1 of ' + Math.max(1, Math.ceil(d.total / d.per)) + ' · ' + d.total + ' subscriptions</p>';
+    }
+    $('#sub-q').addEventListener('input', () => setTimeout(render, 300));
+    render();
+  }
+
+  shell('merchant', 'kpis');
+  viewKpis();
+})();
