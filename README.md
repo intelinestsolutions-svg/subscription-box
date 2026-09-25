@@ -98,17 +98,74 @@ Add the matching keys to `api/config.local.php` and flip one line per concern.
 
 ## Deploying to Hostinger (test.prostudio.my and beyond)
 
-`test.prostudio.my` is a subdomain whose document root is `prostudio.my/public_html/test`.
-Upload the **contents** of this project (not the `SBC-SubscriptionBox` folder itself) there, so the
-API lands at `https://test.prostudio.my/api/...`.
+`test.prostudio.my` is a subdomain whose document root is `prostudio.my/public_html/test`, inside the
+same hosting account as `prostudio.my`. The repo is public, so Hostinger can pull it with no tokens.
 
-1. In cPanel/hPanel File Manager → go to `public_html/test/`, upload the project contents.
-2. hPanel → Databases → MySQL: create a database + user, note the credentials.
-3. Edit `api/config.local.php` **on the server**: `db_*` (Hostinger creds), `install_key`.
-   (`app_url` is already `https://test.prostudio.my`.)
-4. Visit `https://test.prostudio.my/api/install.php?install_key=YOUR_KEY` once —
-   it creates the tables and seeds 12 demo users.
-5. For production: delete `install.php`, set `demo_mode = false`, and rotate the key.
+### A. Recommended: Git deploy in hPanel (one-time setup, instant redeploys)
+
+1. hPanel → **Websites** → click **Manage** on `prostudio.my` → **Git** (Files section).
+2. Click **+ Create** / **Add repository**:
+   - Repository URL: `https://github.com/intelinestsolutions-svg/subscription-box.git`
+   - Branch: `main`
+   - Deployment path: `public_html/test`   ← the subdomain's document root
+3. Hit **Deploy**. The project lands under `public_html/test/` with the API at
+   `https://test.prostudio.my/api/...`.
+4. After any future `git push`, redeploy = open the Git entry → **Deploy** (or enable auto-deploy).
+
+> `api/config.local.php` is intentionally **not** in the repo (no secrets in git). It's created once
+> on the server (step B) and survives subsequent Git pulls because Hostinger doesn't wipe
+> untracked files. `storage/` ships with `.htaccess` (`Require all denied`) and is self-healing.
+
+### B. Database + server config (do once)
+
+1. hPanel → **Databases → MySQL**: create a database + user, note host/user/pass.
+2. File Manager → `public_html/test/api/` → **create `config.local.php`** and paste:
+
+```php
+<?php return [
+    'db_host'      => 'localhost',              // as shown in hPanel
+    'db_name'      => 'u123456789_sbc',         // ← your created DB
+    'db_user'      => 'u123456789_sbc',         // ← your DB user
+    'db_pass'      => 'YOUR-DB-PASSWORD',       // ← your DB password
+
+    'app_url'      => 'https://test.prostudio.my',
+    'demo_mode'    => true,
+    'timezone'     => 'Asia/Kuala_Lumpur',
+    'auth_token_ttl' => 2592000,
+    'cutoff_day'   => 15,
+
+    'ollama_enabled' => true,
+    'ollama_url'      => 'https://YOUR-LIVE-TUNNEL.trycloudflare.com/v1', // while Colab notebook runs
+    'ollama_model'    => 'qwen2.5-coder:7b',
+    'ollama_timeout'  => 15,
+
+    'mail_mode' => 'log', 'sms_mode' => 'log',
+    'twilio_sid' => '', 'twilio_token' => '', 'twilio_from' => '',
+
+    'default_carrier' => 'local_csv',
+    'dhl_api_key' => '', 'dhl_secret' => '', 'dhl_api_url' => 'https://api-eu.dhl.com',
+    'fedex_api_key' => '', 'fedex_secret' => '', 'fedex_api_url' => 'https://apis.fedex.com',
+
+    'address_provider' => 'demo',
+    'loqate_api_key' => '', 'smartystreets_key' => '',
+
+    'install_key' => 'demo-install-2026',
+    'storage_dir' => __DIR__ . '/../storage',
+];
+```
+
+3. Visit **once**: `https://test.prostudio.my/api/install.php?install_key=demo-install-2026`
+   → expect `{"ok":true,...}` (creates tables + seeds 12 demo users).
+4. Log in with password `demo1234`: `merchant@demo.test` (dashboard), `ops@demo.test` (warehouse),
+   `alice@demo.test` (subscriber). In the **Ops console → Churn** tab, run **Score all** once to
+   populate the at-risk board.
+5. For production: delete `api/install.php`, set `demo_mode = false`, rotate `install_key`, and
+   paste real SMTP/Twilio/Stripe/carrier keys as needed.
+
+### C. Fallback: manual File Manager upload
+
+If your plan has no Git tool: File Manager → `public_html/test/`, upload the **contents** of this
+project (not the folder) so the API lands at `https://test.prostudio.my/api/...`, then follow B2–B5.
 
 ## Staying safe
 
